@@ -34,9 +34,11 @@ class Classifier(object):
         self.clf.fit(X_train, Y)
 
     def evaluate(self, X, Y):
+        
         top_k_list = [len(l) for l in Y]
         Y_ = self.predict(X, top_k_list)
         Y = self.binarizer.transform(Y)
+
         averages = ["micro", "macro", "samples", "weighted", "acc"]
         results = {}
         for average in averages:
@@ -65,6 +67,21 @@ class Classifier(object):
         Y_train = [Y[shuffle_indices[i]] for i in range(training_size)]
         X_test = [X[shuffle_indices[i]] for i in range(training_size, len(X))]
         Y_test = [Y[shuffle_indices[i]] for i in range(training_size, len(X))]
+
+        self.train(X_train, Y_train, Y)
+        numpy.random.set_state(state)
+        return self.evaluate(X_test, Y_test)
+
+
+    def split_train_evaluate_idx(self, X, Y, idx_train, idx_test, seed=0):
+        state = numpy.random.get_state()
+        numpy.random.seed(seed)
+        X_train = [X[i] for i in idx_train]
+        Y_train = [Y[i] for i in idx_train]
+        X_test = [X[i] for i in idx_test]
+        Y_test = [Y[i] for i in idx_test]
+
+        # print(X_train, Y_train, X_test, Y_test)
 
         self.train(X_train, Y_train, Y)
         numpy.random.set_state(state)

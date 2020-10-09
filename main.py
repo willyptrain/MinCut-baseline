@@ -11,9 +11,13 @@ from sklearn.linear_model import LogisticRegression
 from collections import defaultdict
 from tqdm import tqdm
 import os
+from data import load_dataset
+import matplotlib.pyplot as plt
 
 from classify import Classifier, read_node_label
 from models import Model
+
+test_x = []
 
 def embed_arr_2_dict(embed_arr, G):
     embed_dict = {}
@@ -25,9 +29,37 @@ def classify(vectors, args):
     if not os.path.isfile(args.classifydir +'_labels.txt'):
         return defaultdict(lambda:0)
     X, Y = read_node_label(args.classifydir +'_labels.txt')
-    print("Training classifier using {:.2f}% nodes...".format(args.train_percent * 100))
+
+#     print("Training classifier using {:.2f}% nodes...".format(args.train_percent * 100))
     clf = Classifier(vectors=vectors, clf=LogisticRegression(solver="lbfgs", max_iter=4000))
-    scores = clf.split_train_evaluate(X, Y, args.train_percent)
+    #     scores = clf.split_train_evaluate(X, Y, args.train_percent)
+    features, labels, graph, idx_train, idx_val, idx_test = load_dataset(str(args.classifydir.split("/")[-1]))
+#     print(idx_train)
+#     print(type(idx_train))
+    idx_train = list(idx_train)
+
+
+#     idx_val = list(idx_val)
+#     idx_val += list(idx_test)[:600]
+
+
+    idx_test = list(idx_test)#[600:]
+
+
+#     for i in idx_val:
+#         idx_train.append(i)
+
+#     idx_val = idx_val[400:]
+
+
+    print("TRAINING SIZE", len(idx_train), "VALIDATION SIZE", len(idx_val), "TESTING SIZE: ", len(list(idx_test)))    
+    scores = clf.split_train_evaluate_idx(X, Y, idx_train, idx_val)
+
+    # scores = clf.split_train_evaluate(X, Y, args.train_percent)
+    test_scores = clf.split_train_evaluate_idx(X, Y, idx_train, idx_test)
+    test_x.append(test_scores['macro'])
+    print("micro:",test_scores['micro'],"macro:",test_scores['macro'])
+
     return scores
 
 def arg_parse():
@@ -73,11 +105,21 @@ def main(args):
     model = Model(nx.number_of_nodes(G), args.num_parts)
     adj = Variable(torch.FloatTensor(nx.adjacency_matrix(G).toarray()), requires_grad=False)
 
+    print("NUMBER OF NODES:", len(G.nodes()))
+    print("NUMBER OF Edges:", len(G.edges()))
+
     if torch.cuda.is_available():
         model = model.cuda()
         adj = adj.cuda()
 
     optimizer = torch.optim.Adam(filter(lambda p : p.requires_grad, model.parameters()), lr=args.lr, weight_decay=args.weight_decay)
+
+    micros = []
+    macros = []
+    accuracies = []
+    losses = []
+
+
 
     for epoch in tqdm(range(args.num_epochs)):
         model.zero_grad()
@@ -90,11 +132,33 @@ def main(args):
         optimizer.step()
 
         if epoch %50==0:
-            print("loss:", loss.item())
 
             vectors = embed_arr_2_dict(model.params.cpu().detach().numpy(), G)
             accs = classify(vectors, args)
-            print("micro:",accs['micro'],"macro:",accs['macro'])
+            print("micro:",accs['micro'],"macro:",accs['macro'], "loss", loss.item(),"accuracy", accs["acc"])
+            micros.append(accs['micro'])
+            macros.append(accs['macro'])
+            accuracies.append(accs['acc'])
+            losses.append(loss.item())
+
+
+
+    print("Final Micro:", micros[-1], "Final Macro:", macros[-1])
+
+    plt.plot(micros, label='micros')
+    plt.plot(macros, label='macros')
+    plt.plot(test_x, label='test scores')
+    plt.legend()
+    plt.title("Dataset: " + str(args.classifydir.split("/")[-1]) + ", training percentage: " + str(args.train_percent) + 
+    ", learning rate: " + str(args.lr) + ", epochs: " + str(args.num_epochs))
+    plt.show()
+
+    plt.plot(losses, label='loss')
+    plt.title("Dataset: " + str(args.classifydir.split("/")[-1]) + ", training percentage: " + str(args.train_percent) + 
+    ", learning rate: " + str(args.lr) + ", epochs: " + str(args.num_epochs))
+    plt.show()
+
+        
             
 if __name__ == "__main__":
 
@@ -105,3 +169,4 @@ if __name__ == "__main__":
 
     main(args)
 
+    

@@ -25,8 +25,8 @@ class Model(nn.Module):
         ncut_loss = torch.sum(torch.tril(super_adj, diagonal=-1) + torch.triu(super_adj, diagonal=1))
 
         if balance_node:
-            balance_loss = torch.sum((torch.sum(self.assign_tensor, dim=0) - self.input_dim//self.num_parts)**2)
+            balance_loss = torch.sum((torch.sum(self.assign_tensor, dim=0) - self.input_dim/self.num_parts)**2)
         else:
-            balance_loss = torch.sum((torch.diagonal(super_adj) - torch.sum(torch.diagonal(super_adj))//self.num_parts)**2)
+            balance_loss = torch.sum((torch.diagonal(super_adj) - torch.sum(torch.diagonal(super_adj))/self.num_parts)**2)
         loss = lam*ncut_loss + (1-lam)*torch.sqrt(balance_loss)
         return loss 
